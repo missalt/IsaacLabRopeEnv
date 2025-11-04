@@ -60,7 +60,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = UR10e_ROBOTIQ_CFG.copy()
 
     # rigid object
-    rope: RigidObjectCfg = RigidObjectCfg(
+    rope: RigidObjectCfg = AssetBaseCfg(
         prim_path="/World/envs/env_.*/Rope",
         spawn=RopeSpawnerCfg(
             collision_props=sim_utils.CollisionPropertiesCfg(),

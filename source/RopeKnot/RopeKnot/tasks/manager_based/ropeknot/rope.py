@@ -10,8 +10,8 @@ class RopeFactory:
     """
 
     def __init__(self, rope_length, position=(0.0, 0.0, 0.0)):
-        self.linkHalfLength = 0.05  # smaller value makes it smoother
-        self.linkRadius = 0.48 * self.linkHalfLength
+        self.linkHalfLength = 0.035  # smaller value makes it smoother
+        self.linkRadius = 0.02
         self.ropeLength = rope_length
         self.ropeSpacing = 1.50
         self.coneAngleLimit = 110
@@ -44,13 +44,15 @@ class RopeFactory:
         UsdPhysics.CollisionAPI.Apply(capsuleGeom.GetPrim())
         UsdPhysics.RigidBodyAPI.Apply(capsuleGeom.GetPrim())
         massAPI = UsdPhysics.MassAPI.Apply(capsuleGeom.GetPrim())
-        massAPI.CreateDensityAttr().Set(0.00005)
+        # massAPI.CreateDensityAttr().Set(1e-15)
+        massAPI.CreateMassAttr().Set(0.005)
         physxCollisionAPI = PhysxSchema.PhysxCollisionAPI.Apply(capsuleGeom.GetPrim())
         physxCollisionAPI.CreateRestOffsetAttr().Set(0.0)
         physxCollisionAPI.CreateContactOffsetAttr().Set(self.contactOffset)
         physicsUtils.add_physics_material_to_prim(
             stage, capsuleGeom.GetPrim(), physicsMaterialPath
         )
+        return capsuleGeom
 
     def createJoint(self, jointPath: Sdf.Path, stage):
         joint = UsdPhysics.Joint.Define(stage, jointPath)
@@ -82,6 +84,7 @@ class RopeFactory:
             driveAPI.CreateTypeAttr("force")
             driveAPI.CreateDampingAttr(self.rope_damping)
             driveAPI.CreateStiffnessAttr(self.rope_stiffness)
+        return joint
 
     def createRope(self, prim_path, stage, physicsMaterialPath: Sdf.Path):
         linkLength = 2.0 * self.linkHalfLength - self.linkRadius
@@ -90,17 +93,6 @@ class RopeFactory:
         scopePath = prim_path
         base = UsdGeom.Xform.Define(stage, scopePath)
         base.AddTranslateOp().Set(value=self.position)
-
-        # capsule instancer
-        instancerPath = scopePath.AppendChild("rigidBodyInstancer")
-        rboInstancer = UsdGeom.PointInstancer.Define(stage, instancerPath)
-
-        capsulePath = instancerPath.AppendChild("capsule")
-        self.createCapsule(capsulePath, stage, physicsMaterialPath)
-
-        meshIndices = []
-        positions = []
-        orientations = []
 
         z = self.capsuleZ + self.linkRadius
         angle = 0.0
@@ -122,67 +114,37 @@ class RopeFactory:
         y_values -= center_y
 
         angle = 0.0
+        i = 0
         for x, y, angle in zip(x_values, y_values, angles):
-            meshIndices.append(0)
-
-            positions.append(Gf.Vec3f(x, y, z))
+            capsulePath = scopePath.AppendChild(f"capsule_{i}")
+            capsule = self.createCapsule(capsulePath, stage, physicsMaterialPath)
+            capsule.AddTranslateOp().Set(value=(x, y, z))
             rotation = Gf.Rotation(Gf.Vec3d(0, 0, 1), angle / 3.14 * 180)
-            orientations.append(Gf.Quath(rotation.GetQuat()))
-        meshList = rboInstancer.GetPrototypesRel()
-        # add mesh reference to point instancer
-        meshList.AddTarget(capsulePath)
+            capsule.AddOrientOp().Set(value=Gf.Quatf(rotation.GetQuat()))
+            i += 1
 
-        rboInstancer.GetProtoIndicesAttr().Set(meshIndices)
-        rboInstancer.GetPositionsAttr().Set(positions)
-        rboInstancer.GetOrientationsAttr().Set(orientations)
-
-        # joint instancer
-        jointInstancerPath = scopePath.AppendChild("jointInstancer")
-        jointInstancer = PhysxSchema.PhysxPhysicsJointInstancer.Define(
-            stage, jointInstancerPath
-        )
-
-        jointPath = jointInstancerPath.AppendChild("joint")
-        self.createJoint(jointPath, stage)
-
-        meshIndices = []
-        body0s = []
-        body0indices = []
-        localPos0 = []
-        localRot0 = []
-        body1s = []
-        body1indices = []
-        localPos1 = []
-        localRot1 = []
-        body0s.append(instancerPath)
-        body1s.append(instancerPath)
+        for i in range(numLinks - 1):
+            rope_prim = stage.GetPrimAtPath(f"{prim_path}/capsule_{i}")
+            fp = UsdPhysics.FilteredPairsAPI.Apply(rope_prim)
+            rel = fp.CreateFilteredPairsRel()
+            a = Sdf.Path(f"{prim_path}/capsule_{i}")
+            b = Sdf.Path(f"{prim_path}/capsule_{i+1}")
+            targets = [a, b]
+            rel.SetTargets(targets)
 
         jointX = self.linkHalfLength - 0.5 * self.linkRadius
         for linkInd in range(numLinks - 1):
-            meshIndices.append(0)
-
-            body0indices.append(linkInd)
-            body1indices.append(linkInd + 1)
-
-            localPos0.append(Gf.Vec3f(jointX, 0, 0))
-            localPos1.append(Gf.Vec3f(-jointX, 0, 0))
-            localRot0.append(Gf.Quath(1.0))
-            localRot1.append(Gf.Quath(1.0))
-
-        meshList = jointInstancer.GetPhysicsPrototypesRel()
-        meshList.AddTarget(jointPath)
-
-        jointInstancer.GetPhysicsProtoIndicesAttr().Set(meshIndices)
-
-        jointInstancer.GetPhysicsBody0sRel().SetTargets(body0s)
-        jointInstancer.GetPhysicsBody0IndicesAttr().Set(body0indices)
-        jointInstancer.GetPhysicsLocalPos0sAttr().Set(localPos0)
-        jointInstancer.GetPhysicsLocalRot0sAttr().Set(localRot0)
-
-        jointInstancer.GetPhysicsBody1sRel().SetTargets(body1s)
-        jointInstancer.GetPhysicsBody1IndicesAttr().Set(body1indices)
-        jointInstancer.GetPhysicsLocalPos1sAttr().Set(localPos1)
-        jointInstancer.GetPhysicsLocalRot1sAttr().Set(localRot1)
+            joint = self.createJoint(scopePath.AppendChild(f"joint_{linkInd}"), stage)
+            joint.CreateLocalPos0Attr(Gf.Vec3f(jointX, 0, 0))
+            joint.CreateLocalPos1Attr(Gf.Vec3f(-jointX, 0, 0))
+            joint.CreateLocalRot0Attr(Gf.Quatf(1.0))
+            joint.CreateLocalRot1Attr(Gf.Quatf(1.0))
+            joint.CreateBody0Rel().SetTargets(
+                [Sdf.Path(f"{prim_path}/capsule_{linkInd}")]
+            )
+            joint.CreateBody1Rel().SetTargets(
+                [Sdf.Path(f"{prim_path}/capsule_{linkInd+1}")]
+            )
 
         return prim_utils.get_prim_at_path(scopePath)
 
