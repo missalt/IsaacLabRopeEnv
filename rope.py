@@ -11,36 +11,34 @@ class RopeFactory:
     """
     Adapted from Isaac Sim Rope demo.
     """
-    def create(self, prim_path: str, stage, rope_length):
-        self._stage = stage
-        self._defaultPrimPath = Sdf.Path(prim_path)
- 
-        self._linkHalfLength = 0.01 # smaller value makes it smoother
-        self._linkRadius = 0.005
-        self._ropeLength = rope_length
-        self._ropeSpacing = 1.50
-        self._coneAngleLimit = 110
-        self._rope_damping = 10.0
-        self._rope_stiffness = 1.0
+    def __init__(self, rope_length, position = (0.0,0.0,0.0)):
+        self.linkHalfLength = 0.01 # smaller value makes it smoother
+        self.linkRadius = 0.005
+        self.ropeLength = rope_length
+        self.ropeSpacing = 1.50
+        self.coneAngleLimit = 110
+        self.rope_damping = 10.0
+        self.rope_stiffness = 1.0
+        self.position = position
+        self.contactOffset = 2.0
+        self.capsuleZ = 0.0
 
-        self._capsuleZ = 0.0
-        
-        # physics options:
-        self._contactOffset = 2.0
-        self._physicsMaterialPath = self._defaultPrimPath.AppendChild("PhysicsMaterial")
-        print(self._defaultPrimPath)
-        print(self._physicsMaterialPath)
-        UsdShade.Material.Define(self._stage, self._physicsMaterialPath)
-        material = UsdPhysics.MaterialAPI.Apply(self._stage.GetPrimAtPath(self._physicsMaterialPath))
+    def create(self, prim_path: str, stage):
+        self._defaultPrimPath = Sdf.Path(prim_path)
+
+        physicsMaterialPath = self._defaultPrimPath.AppendChild("PhysicsMaterial")
+        UsdShade.Material.Define(stage, physicsMaterialPath)
+        material = UsdPhysics.MaterialAPI.Apply(stage.GetPrimAtPath(physicsMaterialPath))
         material.CreateStaticFrictionAttr().Set(0.5)
         material.CreateDynamicFrictionAttr().Set(0.5)
         material.CreateRestitutionAttr().Set(0)
-        return self._createRopes()
 
-    def _createCapsule(self, path: Sdf.Path):
-        capsuleGeom = UsdGeom.Capsule.Define(self._stage, path)
-        capsuleGeom.CreateHeightAttr(self._linkHalfLength)
-        capsuleGeom.CreateRadiusAttr(self._linkRadius)
+        self.createRope(self._defaultPrimPath, stage, physicsMaterialPath)
+
+    def createCapsule(self, path: Sdf.Path, stage, physicsMaterialPath: Sdf.Path):
+        capsuleGeom = UsdGeom.Capsule.Define(stage, path)
+        capsuleGeom.CreateHeightAttr(self.linkHalfLength)
+        capsuleGeom.CreateRadiusAttr(self.linkRadius)
         capsuleGeom.CreateAxisAttr("X")
 
         UsdPhysics.CollisionAPI.Apply(capsuleGeom.GetPrim())
@@ -49,11 +47,11 @@ class RopeFactory:
         massAPI.CreateDensityAttr().Set(0.00005)
         physxCollisionAPI = PhysxSchema.PhysxCollisionAPI.Apply(capsuleGeom.GetPrim())
         physxCollisionAPI.CreateRestOffsetAttr().Set(0.0)
-        physxCollisionAPI.CreateContactOffsetAttr().Set(self._contactOffset)
-        physicsUtils.add_physics_material_to_prim(self._stage, capsuleGeom.GetPrim(), self._physicsMaterialPath)
+        physxCollisionAPI.CreateContactOffsetAttr().Set(self.contactOffset)
+        physicsUtils.add_physics_material_to_prim(stage, capsuleGeom.GetPrim(), physicsMaterialPath)
 
-    def _createJoint(self, jointPath):        
-        joint = UsdPhysics.Joint.Define(self._stage, jointPath)
+    def createJoint(self, jointPath: Sdf.Path, stage):        
+        joint = UsdPhysics.Joint.Define(stage, jointPath)
 
         # locked DOF (lock - low is greater than high)
         d6Prim = joint.GetPrim()
@@ -74,35 +72,35 @@ class RopeFactory:
         dofs = ["rotY", "rotZ"]
         for d in dofs:
             limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, d)
-            limitAPI.CreateLowAttr(-self._coneAngleLimit)
-            limitAPI.CreateHighAttr(self._coneAngleLimit)
+            limitAPI.CreateLowAttr(-self.coneAngleLimit)
+            limitAPI.CreateHighAttr(self.coneAngleLimit)
 
             # joint drives for rope dynamics:
             driveAPI = UsdPhysics.DriveAPI.Apply(d6Prim, d)
             driveAPI.CreateTypeAttr("force")
-            driveAPI.CreateDampingAttr(self._rope_damping)
-            driveAPI.CreateStiffnessAttr(self._rope_stiffness)
+            driveAPI.CreateDampingAttr(self.rope_damping)
+            driveAPI.CreateStiffnessAttr(self.rope_stiffness)
 
-    def _createRopes(self):
-        linkLength = 2.0 * self._linkHalfLength - self._linkRadius
-        numLinks = int(self._ropeLength / linkLength)
+    def createRope(self, prim_path, stage, physicsMaterialPath: Sdf.Path):
+        linkLength = 2.0 * self.linkHalfLength - self.linkRadius
+        numLinks = int(self.ropeLength / linkLength)
         
-        scopePath = self._defaultPrimPath.AppendChild(f"Rope")
-        base = UsdGeom.Xform.Define(self._stage, scopePath)
-        base.AddTranslateOp().Set(value=(0.5, 0.5, 0))
-        print(scopePath)
+        scopePath = prim_path.AppendChild(f"Rope")
+        base = UsdGeom.Xform.Define(stage, scopePath)
+        base.AddTranslateOp().Set(value=self.position)
+        
         # capsule instancer
         instancerPath = scopePath.AppendChild("rigidBodyInstancer")
-        rboInstancer = UsdGeom.PointInstancer.Define(self._stage, instancerPath)
+        rboInstancer = UsdGeom.PointInstancer.Define(stage, instancerPath)
         
         capsulePath = instancerPath.AppendChild("capsule")
-        self._createCapsule(capsulePath)
+        self.createCapsule(capsulePath, stage, physicsMaterialPath)
         
         meshIndices = []
         positions = []
         orientations = []
 
-        z = self._capsuleZ + self._linkRadius
+        z = self.capsuleZ + self.linkRadius
         angle_step = 0.15
         angle = 0.0
         radius = 10
@@ -140,10 +138,10 @@ class RopeFactory:
         
         # joint instancer
         jointInstancerPath = scopePath.AppendChild("jointInstancer")
-        jointInstancer = PhysxSchema.PhysxPhysicsJointInstancer.Define(self._stage, jointInstancerPath)
+        jointInstancer = PhysxSchema.PhysxPhysicsJointInstancer.Define(stage, jointInstancerPath)
         
         jointPath = jointInstancerPath.AppendChild("joint")
-        self._createJoint(jointPath)
+        self.createJoint(jointPath, stage)
 
         meshIndices = []
         body0s = []
@@ -157,7 +155,7 @@ class RopeFactory:
         body0s.append(instancerPath)
         body1s.append(instancerPath)
 
-        jointX = self._linkHalfLength - 0.5 * self._linkRadius
+        jointX = self.linkHalfLength - 0.5 * self.linkRadius
         for linkInd in range(numLinks - 1):
             meshIndices.append(0)
             

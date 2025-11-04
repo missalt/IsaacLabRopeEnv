@@ -56,7 +56,7 @@ import carb
 import isaacsim.core.utils.prims as prim_utils
 import isaacsim.core.utils.stage as stage_utils
 from isaacsim.core.utils.stage import get_current_stage
-from pxr import Sdf, Usd, UsdGeom
+from pxr import Sdf, Usd, UsdGeom, Gf
 
 import isaaclab.sim as sim_utils
 from isaaclab.sim.spawners.from_files import UsdFileCfg
@@ -100,18 +100,12 @@ def spawn_multi_asset(
     else:
         source_prim_paths = [root_path]
 
-
-    # resolve prim paths for spawning and cloning
+    # resolve prim paths for spawning
     prim_paths = [f"{source_prim_path}/{asset_path}" for source_prim_path in source_prim_paths]
 
-    # manually clone prims if the source prim path is a regex expression
-    # note: unlike in the cloner API from Isaac Sim, we do not "reset" xforms on the copied prims.
-    #   This is because the "spawn" calls during the creation of the proto prims already handles this operation.
-    #with Sdf.ChangeBlock():
     for index, prim_path in enumerate(prim_paths):
         # spawn single instance
-        env_spec = Sdf.CreatePrimInLayer(stage.GetRootLayer(), prim_path)
-        prim :Usd.Prim = RopeFactory().create(prim_path, stage, 1.0)
+        prim :Usd.Prim = RopeFactory(1.0, translation).create(prim_path, stage)
 
     # set carb setting to indicate Isaac Lab's environments that different prims have been spawned
     # at varying prim paths. In this case, PhysX parser shouldn't optimize the stage parsing.
@@ -143,9 +137,8 @@ class RopeKnotSceneCfg(InteractiveSceneCfg):
     object: AssetBaseCfg = AssetBaseCfg(
         prim_path="/World/envs/env_.*/Rope",
         spawn=RopeSpawnerCfg(),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 0.0, 2.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.5, 0.0)),
     )
-
 
     # articulation
     robot: ArticulationCfg = UR10e_ROBOTIQ_CFG.copy()
