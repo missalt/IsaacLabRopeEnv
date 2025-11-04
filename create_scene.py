@@ -20,8 +20,12 @@ import argparse
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Tutorial on using the interactive scene interface.")
-parser.add_argument("--num_envs", type=int, default=32, help="Number of environments to spawn.")
+parser = argparse.ArgumentParser(
+    description="Tutorial on using the interactive scene interface."
+)
+parser.add_argument(
+    "--num_envs", type=int, default=32, help="Number of environments to spawn."
+)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -36,7 +40,13 @@ simulation_app = app_launcher.app
 import torch
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg, Articulation, AssetBase, RigidObjectCfg
+from isaaclab.assets import (
+    ArticulationCfg,
+    AssetBaseCfg,
+    Articulation,
+    AssetBase,
+    RigidObjectCfg,
+)
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext, SpawnerCfg
 from isaaclab.utils import configclass
@@ -65,9 +75,9 @@ import re
 
 UR10e_ROBOTIQ_CFG = UR10e_ROBOTIQ_GRIPPER_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 UR10e_ROBOTIQ_CFG.init_state.joint_pos["shoulder_pan_joint"] = 0.0
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["shoulder_lift_joint"] = -35.0/180.0*torch.pi
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["elbow_joint"] = 50.0/180.0*torch.pi
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["wrist_1_joint"] = 50.0/180.0*torch.pi
+UR10e_ROBOTIQ_CFG.init_state.joint_pos["shoulder_lift_joint"] = -35.0 / 180.0 * torch.pi
+UR10e_ROBOTIQ_CFG.init_state.joint_pos["elbow_joint"] = 50.0 / 180.0 * torch.pi
+UR10e_ROBOTIQ_CFG.init_state.joint_pos["wrist_1_joint"] = 50.0 / 180.0 * torch.pi
 UR10e_ROBOTIQ_CFG.init_state.joint_pos["wrist_2_joint"] = 0.0
 
 
@@ -101,11 +111,13 @@ def spawn_multi_asset(
         source_prim_paths = [root_path]
 
     # resolve prim paths for spawning
-    prim_paths = [f"{source_prim_path}/{asset_path}" for source_prim_path in source_prim_paths]
+    prim_paths = [
+        f"{source_prim_path}/{asset_path}" for source_prim_path in source_prim_paths
+    ]
 
     for index, prim_path in enumerate(prim_paths):
         # spawn single instance
-        prim :Usd.Prim = RopeFactory(1.0, translation).create(prim_path, stage)
+        prim: Usd.Prim = RopeFactory(1.0, translation).create(prim_path, stage)
 
     # set carb setting to indicate Isaac Lab's environments that different prims have been spawned
     # at varying prim paths. In this case, PhysX parser shouldn't optimize the stage parsing.
@@ -121,16 +133,20 @@ def spawn_multi_asset(
 class RopeSpawnerCfg(SpawnerCfg):
     func = spawn_multi_asset
 
+
 @configclass
 class RopeKnotSceneCfg(InteractiveSceneCfg):
     """Configuration for a cart-pole scene."""
 
     # ground plane
-    ground = AssetBaseCfg(prim_path="/World/defaultGroundPlane", spawn=sim_utils.GroundPlaneCfg())
+    ground = AssetBaseCfg(
+        prim_path="/World/defaultGroundPlane", spawn=sim_utils.GroundPlaneCfg()
+    )
 
     # lights
     dome_light = AssetBaseCfg(
-        prim_path="/World/Light", spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75))
+        prim_path="/World/Light",
+        spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75)),
     )
 
     # rigid object
@@ -148,8 +164,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     """Runs the simulation loop."""
     # Extract scene entities
     # note: we only do this here for readability.
-    robot:Articulation = scene["robot"]
-    
+    robot: Articulation = scene["robot"]
+
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     count = 0
@@ -168,8 +184,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             robot.write_root_pose_to_sim(root_state[:, :7])
             robot.write_root_velocity_to_sim(root_state[:, 7:])
             # set joint positions with some noise
-            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-            #joint_pos += torch.rand_like(joint_pos) * 0.5
+            joint_pos, joint_vel = (
+                robot.data.default_joint_pos.clone(),
+                robot.data.default_joint_vel.clone(),
+            )
+            # joint_pos += torch.rand_like(joint_pos) * 0.5
             robot.set_joint_position_target(joint_pos)
             robot.write_joint_state_to_sim(joint_pos, joint_vel)
             # clear internal buffers
@@ -177,9 +196,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             print("[INFO]: Resetting robot state...")
         # Apply random action
         # -- generate random joint efforts
-        #efforts = torch.randn_like(robot.data.joint_pos) * 0.05
+        # efforts = torch.randn_like(robot.data.joint_pos) * 0.05
         # -- apply action to the robot
-        #robot.set_joint_effort_target(efforts)
+        # robot.set_joint_effort_target(efforts)
         # -- write data to sim
         scene.write_data_to_sim()
         # Perform step
@@ -199,7 +218,9 @@ def main():
     sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
     stage = sim.stage
     # Design scene
-    scene_cfg = RopeKnotSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0, replicate_physics=False)
+    scene_cfg = RopeKnotSceneCfg(
+        num_envs=args_cli.num_envs, env_spacing=2.0, replicate_physics=False
+    )
     scene = InteractiveScene(scene_cfg)
 
     # Play the simulator
