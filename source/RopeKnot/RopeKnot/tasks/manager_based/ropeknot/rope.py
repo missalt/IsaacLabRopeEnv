@@ -10,8 +10,8 @@ class RopeFactory:
     """
 
     def __init__(self, rope_length, position=(0.0, 0.0, 0.0)):
-        self.linkHalfLength = 0.035  # smaller value makes it smoother
-        self.linkRadius = 0.02
+        self.linkHalfLength = 0.005  # smaller value makes it smoother
+        self.linkRadius = 0.5 * self.linkHalfLength  # 0.005
         self.ropeLength = rope_length
         self.ropeSpacing = 1.50
         self.coneAngleLimit = 110
@@ -20,6 +20,7 @@ class RopeFactory:
         self.position = position
         self.contactOffset = 2.0
         self.capsuleZ = 0.0
+        self.filter_collisions = False
 
     def create(self, prim_path: str, stage):
         self._defaultPrimPath = Sdf.Path(prim_path)
@@ -29,8 +30,8 @@ class RopeFactory:
         material = UsdPhysics.MaterialAPI.Apply(
             stage.GetPrimAtPath(physicsMaterialPath)
         )
-        material.CreateStaticFrictionAttr().Set(0.5)
-        material.CreateDynamicFrictionAttr().Set(0.5)
+        material.CreateStaticFrictionAttr().Set(0.01)
+        material.CreateDynamicFrictionAttr().Set(0.05)
         material.CreateRestitutionAttr().Set(0)
 
         self.createRope(self._defaultPrimPath, stage, physicsMaterialPath)
@@ -45,7 +46,7 @@ class RopeFactory:
         UsdPhysics.RigidBodyAPI.Apply(capsuleGeom.GetPrim())
         massAPI = UsdPhysics.MassAPI.Apply(capsuleGeom.GetPrim())
         # massAPI.CreateDensityAttr().Set(1e-15)
-        massAPI.CreateMassAttr().Set(0.005)
+        massAPI.CreateMassAttr().Set(0.001)
         physxCollisionAPI = PhysxSchema.PhysxCollisionAPI.Apply(capsuleGeom.GetPrim())
         physxCollisionAPI.CreateRestOffsetAttr().Set(0.0)
         physxCollisionAPI.CreateContactOffsetAttr().Set(self.contactOffset)
@@ -123,18 +124,21 @@ class RopeFactory:
             capsule.AddOrientOp().Set(value=Gf.Quatf(rotation.GetQuat()))
             i += 1
 
-        for i in range(numLinks - 1):
-            rope_prim = stage.GetPrimAtPath(f"{prim_path}/capsule_{i}")
-            fp = UsdPhysics.FilteredPairsAPI.Apply(rope_prim)
-            rel = fp.CreateFilteredPairsRel()
-            a = Sdf.Path(f"{prim_path}/capsule_{i}")
-            b = Sdf.Path(f"{prim_path}/capsule_{i+1}")
-            targets = [a, b]
-            rel.SetTargets(targets)
+        if self.filter_collisions:
+            for i in range(numLinks - 1):
+                rope_prim = stage.GetPrimAtPath(f"{prim_path}/capsule_{i}")
+                fp = UsdPhysics.FilteredPairsAPI.Apply(rope_prim)
+                rel = fp.CreateFilteredPairsRel()
+                a = Sdf.Path(f"{prim_path}/capsule_{i}")
+                b = Sdf.Path(f"{prim_path}/capsule_{i+1}")
+                targets = [a, b]
+                rel.SetTargets(targets)
 
         jointX = self.linkHalfLength - 0.5 * self.linkRadius
         for linkInd in range(numLinks - 1):
-            joint = self.createJoint(scopePath.AppendChild(f"joint_{linkInd}"), stage)
+            joint = self.createJoint(
+                scopePath.AppendChild(f"joint_{linkInd}"), stage
+            )
             joint.CreateLocalPos0Attr(Gf.Vec3f(jointX, 0, 0))
             joint.CreateLocalPos1Attr(Gf.Vec3f(-jointX, 0, 0))
             joint.CreateLocalRot0Attr(Gf.Quatf(1.0))
@@ -149,6 +153,10 @@ class RopeFactory:
         return prim_utils.get_prim_at_path(scopePath)
 
 
-# stage = omni.usd.get_context().get_stage()
-# dem = RopeFactory(1.0)
-# print(dem.create("/World/Rope", stage))
+"""stage = omni.usd.get_context().get_stage()
+dem = RopeFactory(0.4)
+dem.capsuleZ = 1.5
+dem.rope_damping = 5
+dem.rope_stiffness = 50
+dem.coneAngleLimit = 50
+print(dem.create("/World/Rope", stage))"""

@@ -46,7 +46,14 @@ def spawn_multi_asset(
 
     for index, prim_path in enumerate(prim_paths):
         # spawn single instance
-        RopeFactory(1.0, translation).create(prim_path, stage)
+        factory = RopeFactory(1.0, translation)
+        factory.coneAngleLimit = cfg.coneAngleLimit
+        factory.rope_stiffness = cfg.rope_stiffness
+        factory.rope_damping = cfg.rope_damping
+        factory.linkHalfLength = cfg.linkHalfLength
+        factory.linkRadius = cfg.linkRadius
+
+        factory.create(prim_path, stage)
         # apply collision properties
         if cfg.collision_props is not None:
             schemas.define_collision_properties(prim_path, cfg.collision_props)
@@ -71,3 +78,8 @@ def spawn_multi_asset(
 @configclass
 class RopeSpawnerCfg(RigidObjectSpawnerCfg):
     func = spawn_multi_asset
+    rope_damping = 5
+    rope_stiffness = 50
+    coneAngleLimit = 50
+    linkHalfLength = 0.03
+    linkRadius = 0.5 * 0.03
