@@ -50,7 +50,7 @@ from isaaclab.assets import (
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext, SpawnerCfg
 from isaaclab.utils import configclass
-from RopeKnot.rope import RopeFactory
+from .rope import RopeFactory
 from isaacsim.core.utils.stage import get_current_stage
 from pxr import Usd
 from collections.abc import Callable
@@ -70,7 +70,7 @@ from pxr import Sdf, Usd, UsdGeom, Gf
 
 import isaaclab.sim as sim_utils
 from isaaclab.sim.spawners.from_files import UsdFileCfg
-from RopeKnot.rope import RopeFactory
+from .rope import RopeFactory
 import re
 
 UR10e_ROBOTIQ_CFG = UR10e_ROBOTIQ_GRIPPER_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
